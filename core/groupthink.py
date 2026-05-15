@@ -52,79 +52,78 @@ class IterationResult:
 
 # ── Prompts ───────────────────────────────────────────────────────────────────
 
-_WEB_GROUNDING_NOTICE = """
+_WEB_GROUNDING_NOTICE = """\
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-LIVE WEB SEARCH — MANDATORY READING BEFORE YOU RESPOND
+LIVE WEB SEARCH RESULTS — READ BEFORE RESPONDING
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-The web search results in this prompt were retrieved from the live
-internet seconds ago. They are REAL articles from REAL URLs.
-
-Your training data has a cutoff date. These results describe events
-that occurred AFTER your training cutoff. That does not make them
-fabricated — it means the world changed after your training ended.
+The web search results below were retrieved from the live internet
+seconds ago. They are real articles from real URLs and supersede
+your training data, which has a cutoff date.
 
 YOU MUST:
-  • Accept web search content as factual and current
-  • Report and build on what those sources say
+  • Treat web search content as current ground truth
+  • Prioritize web-sourced facts over anything in your training data
   • Cite the URLs when referencing web content
 
 YOU MUST NOT:
-  • Call web-sourced information "hypothetical", "fabricated",
-    "hallucinated", or a "scenario"
-  • Dismiss web results because you have no training knowledge
-    of the events they describe — that is expected and normal
+  • Dismiss or second-guess web results because you lack training
+    knowledge of the events — that is expected and normal
   • Correct web content using your training data
-  • Add caveats suggesting the web results might not be real
+  • Label web-sourced information as "hypothetical" or "alleged"
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 """
 
 _RESEARCH_SYSTEM = (
     "You are an expert research assistant. Provide thorough, well-structured, "
     "fact-based responses with specific details, examples, and citations where possible. "
-    "Organize your response with clear headings and bullet points."
-    + _WEB_GROUNDING_NOTICE
+    "Organize your response with clear headings and bullet points. "
+    "When web search results are provided in the prompt, they are current ground truth — "
+    "prioritize them over your training data and cite their URLs."
 )
 
 _GROUPTHINK_SYSTEM = (
     "You are reviewing a multi-model research session.\n\n"
     "Your task:\n"
-    "1. Read the live web search results and initial AI responses provided.\n"
-    "2. Build on the web-sourced facts — do NOT second-guess or dismiss them.\n"
-    "3. Note where AI models disagreed with the web sources and correct them.\n"
-    "4. Add analysis, context, and implications based on the verified facts.\n"
-    "5. Write a clear, well-structured response grounded in the web evidence.\n"
-    + _WEB_GROUNDING_NOTICE
+    "1. When web search results are provided, treat them as authoritative current facts.\n"
+    "2. Build on web-sourced facts — do not second-guess or dismiss them.\n"
+    "3. Identify and correct any AI responses that contradict the web sources.\n"
+    "4. Add analysis, context, and implications grounded in the verified facts.\n"
+    "5. Write a clear, well-structured response that prioritizes web evidence over training data."
 )
 
 _SYNTHESIS_SYSTEM = (
     "You are producing the final synthesis of a multi-model research session.\n\n"
-    "YOUR ONLY JOB is to synthesize what the provided web search results and AI responses "
-    "actually say. You are a reporter, not a fact-checker against your training data.\n\n"
     "RULES:\n"
-    "1. The web search results are the ground truth. Start there.\n"
-    "2. Use the AI responses to add analysis and context.\n"
+    "1. Web search results are the ground truth — start there and build on them.\n"
+    "2. Use the AI responses for analysis and context, not as a source of facts.\n"
     "3. If an AI response contradicts the web search results, trust the web results.\n"
-    "4. Do NOT introduce any information from your training data that isn't in the "
-    "provided content — your training data is older than the web results.\n"
-    "5. Do NOT use words like 'hypothetical', 'alleged', 'claimed', or 'scenario' "
-    "for events described in the web search results — treat them as facts.\n\n"
+    "4. Do not introduce information from your training data that is absent from the "
+    "provided content.\n"
+    "5. Do not use words like 'hypothetical', 'alleged', or 'claimed' for events "
+    "described in web search results — treat them as facts.\n\n"
     "Produce a clear, well-structured summary that faithfully represents the provided content."
-    + _WEB_GROUNDING_NOTICE
 )
 
 
 def _build_research_prompt(query: str, topic_content: str, sources_content: str,
                             search_result: Optional[SearchResult] = None) -> str:
+    has_search = bool(search_result and search_result.ok and search_result.results)
     parts = [f"## Research Query\n\n{query}\n"]
     parts.append(f"## Topic Context\n\n{topic_content}\n")
     if sources_content.strip():
         parts.append(f"## Known Sources\n\n{sources_content}\n")
-    if search_result and search_result.ok and search_result.results:
-        parts.append(f"## Fresh Web Search Results\n\n{search_result.to_markdown()}\n")
-    parts.append(
-        "Please research this query thoroughly, drawing on the context above "
-        "and your own knowledge."
-    )
+    if has_search:
+        parts.append(_WEB_GROUNDING_NOTICE)
+        parts.append(f"## Live Web Search Results\n\n{search_result.to_markdown()}\n")
+        parts.append(
+            "Using the web search results above as your primary source of facts, "
+            "research this query thoroughly and cite the relevant URLs."
+        )
+    else:
+        parts.append(
+            "Please research this query thoroughly, drawing on the context above "
+            "and your own knowledge."
+        )
     return "\n".join(parts)
 
 
@@ -133,18 +132,26 @@ def _build_groupthink_prompt(
     combined_responses: str,
     search_result: Optional[SearchResult] = None,
 ) -> str:
+    has_search = bool(search_result and search_result.ok and search_result.results)
     parts = [f"## Original Research Query\n\n{query}\n"]
-    if search_result and search_result.ok and search_result.results:
+    if has_search:
+        parts.append(_WEB_GROUNDING_NOTICE)
         parts.append(
-            "## Live Web Search Results (AUTHORITATIVE — retrieved this session)\n\n"
+            "## Live Web Search Results (retrieved this session — authoritative)\n\n"
             + search_result.to_markdown() + "\n"
         )
-    parts.append(
-        "## Initial Responses from Multiple AI Models\n\n"
-        + combined_responses + "\n\n"
-        "Review the web search results and AI responses above. "
-        "Produce an improved analysis that is fully grounded in the web evidence."
-    )
+    parts.append("## Initial Responses from Multiple AI Models\n\n" + combined_responses + "\n")
+    if has_search:
+        parts.append(
+            "Review the web search results and AI responses above. "
+            "Prioritize the web evidence. Correct any AI claims that contradict it, "
+            "then produce a well-structured, web-grounded analysis."
+        )
+    else:
+        parts.append(
+            "Review the AI responses above. Identify agreements and disagreements, "
+            "correct any factual errors, and produce a well-structured synthesis."
+        )
     return "\n".join(parts)
 
 
@@ -153,21 +160,30 @@ def _build_synthesis_prompt(
     gt_responses: list[LLMResponse],
     search_result: Optional[SearchResult] = None,
 ) -> str:
+    has_search = bool(search_result and search_result.ok and search_result.results)
     parts = [f"## Original Research Query\n\n{query}\n"]
-    if search_result and search_result.ok and search_result.results:
+    if has_search:
+        parts.append(_WEB_GROUNDING_NOTICE)
         parts.append(
-            f"## Live Web Search Results (retrieved this session — treat as authoritative)\n\n"
+            f"## Live Web Search Results (retrieved this session — authoritative)\n\n"
             f"{search_result.to_markdown()}\n"
         )
     parts.append("## GroupThink Responses from Multiple AI Models\n")
     for r in gt_responses:
         if r.ok:
             parts.append(r.to_markdown())
-    parts.append(
-        "\nUsing the web search results and GroupThink responses above as your primary source "
-        "of truth, synthesize a final definitive summary. Do not introduce facts from your "
-        "training data that are not present in the content above."
-    )
+    if has_search:
+        parts.append(
+            "\nSynthesize a final definitive summary. The web search results are your primary "
+            "source of facts — prioritize them over the AI responses, which provide analysis "
+            "only. Do not introduce facts from your training data that are absent from the "
+            "content above."
+        )
+    else:
+        parts.append(
+            "\nSynthesize a final definitive summary from the GroupThink responses above. "
+            "Do not introduce facts that are absent from the content above."
+        )
     return "\n".join(parts)
 
 

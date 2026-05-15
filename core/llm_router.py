@@ -26,6 +26,10 @@ from groupthink import config
 _GPT_COMPLETION_TOKEN_MODELS = {"o1", "o1-mini", "o3", "o3-mini", "o4-mini",
                                  "gpt-5", "gpt-5-mini", "gpt-5-nano"}
 
+# Newer OpenAI models use "developer" role instead of "system".
+_GPT_DEVELOPER_ROLE_MODELS = {"gpt-4.1", "gpt-4.1-mini", "gpt-4.1-nano",
+                               "gpt-5", "gpt-5-mini", "gpt-5-nano"}
+
 
 # ── Response dataclass ────────────────────────────────────────────────────────
 
@@ -126,9 +130,10 @@ class GPTLLM(BaseLLM):
     async def query(self, prompt: str, system: str = "") -> LLMResponse:
         start = time.monotonic()
         try:
+            sys_role = "developer" if self._model in _GPT_DEVELOPER_ROLE_MODELS else "system"
             messages = []
             if system:
-                messages.append({"role": "system", "content": system})
+                messages.append({"role": sys_role, "content": system})
             messages.append({"role": "user", "content": prompt})
 
             reasoning = self._model in _GPT_COMPLETION_TOKEN_MODELS
@@ -140,7 +145,15 @@ class GPTLLM(BaseLLM):
                 kwargs["temperature"] = config.TEMPERATURE
 
             resp = await self._client.chat.completions.create(**kwargs)
-            text = resp.choices[0].message.content or ""
+            choice = resp.choices[0]
+            text = choice.message.content or ""
+            if not text:
+                refusal = getattr(choice.message, "refusal", None)
+                reason  = getattr(choice, "finish_reason", "unknown")
+                if refusal:
+                    return self._timed_error(start, Exception(f"Refusal: {refusal}"))
+                if reason != "stop":
+                    return self._timed_error(start, Exception(f"Empty response (finish_reason={reason})"))
             return LLMResponse(
                 llm=self.name, content=text,
                 elapsed=time.monotonic() - start, model=self._model,

@@ -283,7 +283,7 @@ class SettingsDialog(QDialog):
             input_row.addWidget(edit)
 
             toggle = QPushButton("Show")
-            toggle.setFixedWidth(52)
+            toggle.setFixedWidth(70)
             toggle.setCheckable(True)
             toggle.toggled.connect(
                 lambda checked, e=edit, b=toggle: (
