@@ -1,20 +1,37 @@
 """
 config.py — Central configuration for Groupthink.
 
-API keys are read from a .env file in the project root (groupthink/).
-Copy .env.example to .env and fill in your keys.
-The topics root directory is also configurable here.
+API keys are read from a .env file.
+- Development: .env lives next to this file (the repo root).
+- Packaged app (PyInstaller): .env lives in a platform user-data directory so
+  it survives app updates and is writable without admin rights.
 """
 
 import os
+import sys
 from pathlib import Path
 from dotenv import load_dotenv
 
-# ── Paths ──────────────────────────────────────────────────────────────────────
-# Project root = the directory containing this file
-PROJECT_ROOT = Path(__file__).parent.resolve()
 
-# Load .env from project root
+def _get_data_dir() -> Path:
+    """Return the writable directory used for .env and app_settings.json."""
+    if getattr(sys, "frozen", False):
+        home = Path.home()
+        if sys.platform == "darwin":
+            d = home / "Library" / "Application Support" / "Groupthink"
+        elif sys.platform == "win32":
+            d = Path(os.environ.get("APPDATA", str(home))) / "Groupthink"
+        else:
+            d = home / ".groupthink"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+    return Path(__file__).parent.resolve()
+
+
+# ── Paths ──────────────────────────────────────────────────────────────────────
+PROJECT_ROOT = _get_data_dir()
+
+# Load .env from the data directory
 load_dotenv(PROJECT_ROOT / ".env", override=True)
 
 # Where all topic directories live (can override via GROUPTHINK_TOPICS_DIR in .env)
@@ -120,6 +137,17 @@ def enabled_llms() -> list[str]:
         "deepseek": DEEPSEEK_API_KEY,
     }
     return [name for name, key in candidates.items() if key]
+
+# ── Live reload (called after settings dialog writes a new .env) ───────────────
+def reload_keys() -> None:
+    """Re-read .env and update all module-level API-key variables in place."""
+    load_dotenv(PROJECT_ROOT / ".env", override=True)
+    global ANTHROPIC_API_KEY, OPENAI_API_KEY, GOOGLE_API_KEY, DEEPSEEK_API_KEY, TAVILY_API_KEY
+    ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+    OPENAI_API_KEY    = os.getenv("OPENAI_API_KEY", "")
+    GOOGLE_API_KEY    = os.getenv("GEMINI_API_KEY", "") or os.getenv("GOOGLE_API_KEY", "")
+    DEEPSEEK_API_KEY  = os.getenv("DEEPSEEK_API_KEY", "")
+    TAVILY_API_KEY    = os.getenv("TAVILY_API_KEY", "")
 
 # ── Sanity check (imported at startup) ────────────────────────────────────────
 def validate() -> list[str]:
