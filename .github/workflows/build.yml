@@ -27,7 +27,8 @@ jobs:
             pyinstaller \
             anthropic openai google-genai tavily-python \
             python-dotenv aiofiles qasync \
-            PyQt6 PyQt6-WebEngine
+            PyQt6 PyQt6-WebEngine \
+            markdown
 
       - name: Build .app
         run: pyinstaller groupthink/groupthink.spec
@@ -64,7 +65,8 @@ jobs:
             pyinstaller `
             anthropic openai google-genai tavily-python `
             python-dotenv aiofiles qasync `
-            PyQt6 PyQt6-WebEngine
+            PyQt6 PyQt6-WebEngine `
+            markdown
 
       - name: Build .exe
         run: pyinstaller groupthink/groupthink.spec
