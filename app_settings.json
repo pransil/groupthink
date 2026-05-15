@@ -1,0 +1,17 @@
+{
+  "enabled": {
+    "claude": true,
+    "gpt": true,
+    "gemini": true,
+    "deepseek": true
+  },
+  "tiers": {
+    "claude": "high",
+    "gpt": "medium",
+    "gemini": "high",
+    "deepseek": "high"
+  },
+  "synthesis_llm": "deepseek",
+  "search_max_results": 10,
+  "search_full_content": true
+}
